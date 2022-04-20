@@ -38,6 +38,10 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
+/* Memory-mapped I/O */
+cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
+cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
+
 void setup() {
   Serial.begin(9600);
     cowpi_setup(SPI | MAX7219);
@@ -48,4 +52,28 @@ void setup() {
 
 void loop() {
   ;
+}
+
+volatile int count = 0;
+ISR(TIMER1_COMPA_vect){
+  // any vars declared should be as volatile
+  // if need to reset timer, write 0 to timer1's counter field
+  Serial.print(count++);
+}
+
+void setupTimer() {
+/*
+ * comparison value = 3225 = 16,000,000 / (20*256)
+ * using 256 prescaler
+ */
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+  OCR1A = 3124;
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS12 bits for 256 prescaler
+  TCCR1B |= (1 << CS12);  
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
 }
