@@ -54,6 +54,7 @@ cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
 
 //Global Variables
+uint8_t locked;
 uint8_t keyPressed = 0; // holds the last key pressed on the 4x4 keypad
 uint8_t segments[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // holds the values currently displayed on the keypad
 
@@ -66,9 +67,24 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(3), handleKeypress , CHANGE );
   setupTimer();
   clearDisplay();
+  //Set combination
+  EEPROM.put(0, 1);
+  EEPROM.put(1, 2);
+  EEPROM.put(2, 3);
+  //Set system to locked on start
+  locked = 1;
 }
 
 void loop() {
+  if(locked == 1) {
+
+
+
+  } else {
+
+
+
+  }
   ;
 }
 
