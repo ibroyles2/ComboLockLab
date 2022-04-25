@@ -2,6 +2,8 @@
 #include "cowpi.h"
 
 #define DEBOUNCE 20u
+#define SINGLE_CLICK_TIME 150u
+#define DOUBLE_CLICK_TIME 500u
 
 // function stubs
 uint8_t charToHex(char keyPressed);
@@ -58,15 +60,25 @@ uint8_t attempt = 0;
 uint8_t cursorLocation = 1;
 uint8_t locked;
 uint8_t keyPressed = 0; // holds the last key pressed on the 4x4 keypad
-unsigned long lastKeypadPress = 0;
+unsigned long lastKeypadPress = 16;
 uint8_t segments[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // holds the values currently displayed on the keypad
+
+//variables for button actions
+volatile unsigned long LastLeftAction = 0; // LastLeftAction
+volatile unsigned long LastRightAction = 0; // LastRightAction
+volatile unsigned long OldLeftPosition = 1; // OldLeftPosition
+volatile unsigned long OldRightPosition = 1; // OldRightPosition
+volatile unsigned long LastLeftPress = 0; // LastLeftPress
+volatile unsigned long LastRightPress = 0; // LastRightPress
+volatile unsigned long LastLeftClick = 0; // LastLeftClick
+volatile bool DoubleClick = 0;
 
 void setup() {
   Serial.begin(9600);
     cowpi_setup(SPI | MAX7219);
   ioPorts = (cowpi_ioPortRegisters *) 0x23;
   spi = (cowpi_spiRegisters *)(cowpi_IObase + 0x2C);
-//  attachInterrupt(digitalPinToInterrupt(2), handleButtonAction , CHANGE );
+  attachInterrupt(digitalPinToInterrupt(2), handleButtonAction , CHANGE );
   attachInterrupt(digitalPinToInterrupt(3), handleKeypress , CHANGE );
   setupTimer();
   clearDigits();
@@ -133,10 +145,76 @@ void setupTimer() {
 void handleKeypress(){
   char key;
   unsigned long now = millis();
-  if(now - lastKeypadPress > DEBOUNCE){
+  if(now - lastKeypadPress > DEBOUNCE){ 
     lastKeypadPress = now;
     key = cowpi_getKeypress() ;
     keyPressed = charToHex(key);
+    Serial.println(keyPressed);
+  }
+}
+
+void handleButtonAction() {
+  // right button is connected to D9
+  // left button is connected to D8
+  /*
+   * if 0, builder is in decimal
+   * if 1, builder is in hex
+   */
+  unsigned long now = millis();
+  uint8_t NewLeftPosition;
+  uint8_t NewRightPosition;
+  if ((now - LastLeftAction) > DEBOUNCE){
+    NewLeftPosition = digitalRead(8);
+//    LastLeftAction = now;
+  }else{
+    NewLeftPosition = OldLeftPosition;
+  }
+  if ((now - LastRightAction) > DEBOUNCE){
+    NewRightPosition = digitalRead(9);
+//    LastRightAction = now;
+  }else{
+    NewRightPosition = OldRightPosition;
+  }
+
+  if (OldLeftPosition == NewLeftPosition && OldRightPosition == NewRightPosition){
+    return;
+  }else {
+    // case 1: Right button pressed
+    if (OldRightPosition && !NewRightPosition){
+      LastRightPress = now;
+      Serial.print("Right button pressed\n");
+    }
+    // Case 2: Right Button Released
+    if (!OldRightPosition && NewRightPosition){
+       Serial.print("Right button released\n");
+      if ((LastRightPress + SINGLE_CLICK_TIME) < now){
+          OldRightPosition = 0;
+      }
+    }
+    // Case 3: Left Button Pressed
+    if (OldLeftPosition && !NewLeftPosition){
+      LastLeftPress = now;
+      Serial.print("Left button pressed\n");
+      if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
+        DoubleClick = true;
+        Serial.print("Left button double clicked\n"); 
+        }
+    }
+    // Case 4: Left Button Released
+    if (!OldLeftPosition && NewLeftPosition){
+      if (DoubleClick ){
+        Serial.print("Left button double clicked and released\n");
+        DoubleClick = !DoubleClick; //Turn off DoubleClick flag
+      }else if (LastLeftPress + SINGLE_CLICK_TIME > now){
+        LastLeftClick = 0;
+        Serial.print("Left button release\n");
+      }else{
+        LastLeftClick = now;
+        Serial.print("Left button release\n");
+      }
+    }
+    OldLeftPosition = NewLeftPosition;
+    OldRightPosition = NewRightPosition;
   }
 }
 
@@ -225,6 +303,20 @@ void blinkCursor(){
         FLAG = !FLAG;
       }
       break;
+  }
+}
+
+void moveCursor(){
+  switch (cursorLocation){
+    case 1:
+      cursorLocation = 2;
+      break;
+    case 2:
+      cursorLocation = 3;
+      break;
+    case 3: 
+      cursorLocation = 1;
+      break; 
   }
 }
 uint8_t charToHex(char keyPressed){
