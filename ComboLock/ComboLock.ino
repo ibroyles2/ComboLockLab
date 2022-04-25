@@ -221,7 +221,49 @@ void handleButtonAction() {
 void displayData(uint8_t address, uint8_t value) {
   // address is MAX7219's register address (1-8 for digits; otherwise see MAX7219 datasheet Table 2)
   // value is the bit pattern to place in the register
-  cowpi_sendDataToMax7219(address, value);
+  cowpi_spiEnable;
+  ioPorts[D8_D13].output &= 0b111011;
+  spi->data = address;
+  while(!(spi->status &= 0b10000000)) {
+    //Do nothing
+  }
+  spi->data = value;
+  while(!(spi->status &= 0b10000000)) {
+    //Do nothing
+  }
+  ioPorts[D8_D13].output |= 0b000100;
+  cowpi_spiDisable;
+}
+
+uint8_t getKeyPressed() {
+  uint8_t keyPressed = 0xFF;
+  unsigned long now = millis();
+  if (now - lastKeypadPress > DEBOUNCE_TIME) {
+    lastKeypadPress = now;
+    for(int i = 0; i < 4; i++) {
+      ioPorts[D0_D7].output |= 0b11110000;
+      if(i == 0) {         
+        ioPorts[D0_D7].output &= 0b11100000;
+      } else if (i == 1) {
+        ioPorts[D0_D7].output &= 0b11010000;
+      } else if (i == 2) {
+        ioPorts[D0_D7].output &= 0b10110000;
+      } else if (i == 3) {
+        ioPorts[D0_D7].output &= 0b01110000;
+      }
+      if(!(ioPorts[A0_A5].input & 0b000001)) {
+        keyPressed = keys[i][0];
+      } else if (!(ioPorts[A0_A5].input & 0b000010)) {
+        keyPressed = keys[i][1];
+      } else if (!(ioPorts[A0_A5].input & 0b000100)) {
+        keyPressed = keys[i][2];
+      } else if (!(ioPorts[A0_A5].input & 0b001000)) {
+        keyPressed = keys[i][3];
+      }
+    }
+    ioPorts[D0_D7].output &= 0b00000000;
+  }
+  return keyPressed;
 }
 
 
