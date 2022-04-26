@@ -1,7 +1,7 @@
 #include <EEPROM.h>
 #include "cowpi.h"
 
-#define DEBOUNCE 20u
+#define  DEBOUNCE 20u
 #define SINGLE_CLICK_TIME 150u
 #define DOUBLE_CLICK_TIME 500u
 
@@ -51,6 +51,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -60,8 +61,10 @@ uint8_t attempt = 0;
 uint8_t cursorLocation = 1;
 uint8_t locked;
 uint8_t keyPressed = 0; // holds the last key pressed on the 4x4 keypad
-unsigned long lastKeypadPress = 16;
-uint8_t segments[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // holds the values currently displayed on the keypad
+unsigned long lastKeypadPress = 0;
+uint8_t segments[8] = {0, 0, 1, 0, 0, 1, 0, 0}; // holds the values currently displayed on the keypad
+enum mode systemMode;
+uint8_t index = 0;
 
 //variables for button actions
 volatile unsigned long LastLeftAction = 0; // LastLeftAction
@@ -87,20 +90,16 @@ void setup() {
   EEPROM.put(1, 2);
   EEPROM.put(2, 3);
   //Set system to locked on start
-  locked = 1;
+  systemMode = LOCKED;
+  ;
 }
 
 void loop() {
-  if(locked == 1) {
 
-
-
-  } else {
-
-
-
-  }
-  ;
+  if(systemMode == UNLOCKED){}
+  if(systemMode == ALARMED){}
+  if(systemMode == CHANGING){}
+  if(systemMode == CONFIRMING){}
 }
 
 volatile long int count = 0;
@@ -110,16 +109,9 @@ ISR(TIMER1_COMPA_vect){
   // if need to reset timer, write 0 to timer1's counter field
 //   any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
-  blinkCursor();
-  if(count == 10){
-    cursorLocation = 1;
-  }
-  if (count == 20){
-    cursorLocation = 2;
-  }
- if (count == 30){
-    cursorLocation = 3;
-    count = 0;
+//  if blinkCursor();
+  if(systemMode == LOCKED){
+    blinkCursor();   
   }
   count++;
 
@@ -145,12 +137,27 @@ void setupTimer() {
 void handleKeypress(){
   char key;
   unsigned long now = millis();
+  uint8_t newKeyPress;
   if(now - lastKeypadPress > DEBOUNCE){ 
     lastKeypadPress = now;
-    key = cowpi_getKeypress() ;
+    key = cowpi_getKeypress();
     keyPressed = charToHex(key);
+//    newKeyPress = charToHex(key);
     Serial.println(keyPressed);
+    if (systemMode == LOCKED){
+      combinationEntry();
+    }
   }
+//  if(newKeyPress && !keyPressed){
+//    lastKeypadPress = now;
+//    Serial.println("keypad pressed");
+//    keyPressed = newKeyPress;
+//  }
+//  if(!newKeyPress && keyPressed){
+//    lastKeypadPress = now;
+//    Serial.println("keypad released");
+//    return;
+//  }
 }
 
 void handleButtonAction() {
@@ -163,7 +170,7 @@ void handleButtonAction() {
   unsigned long now = millis();
   uint8_t NewLeftPosition;
   uint8_t NewRightPosition;
-  if ((now - LastLeftAction) > DEBOUNCE){
+  if ((now - LastLeftAction) > DEBOUNCE ){
     NewLeftPosition = digitalRead(8);
 //    LastLeftAction = now;
   }else{
@@ -182,6 +189,7 @@ void handleButtonAction() {
     // case 1: Right button pressed
     if (OldRightPosition && !NewRightPosition){
       LastRightPress = now;
+      moveCursor();
       Serial.print("Right button pressed\n");
     }
     // Case 2: Right Button Released
@@ -218,6 +226,40 @@ void handleButtonAction() {
   }
 }
 
+
+void combinationEntry(){
+  switch (cursorLocation){
+    /*
+     * case 1: I am setting this up to work so that when the user enters a third digit into 
+     * a single combination slot they are able to edit that number
+     */
+    case 1:
+      if(index > 1){
+        segments[1] = sevenSegments[keyPressed];
+        index = 0;
+      }
+      segments[1 - index] = sevenSegments[keyPressed];
+      index ++;
+      break;
+    case 2:
+      if(index > 4){
+        segments[3] = sevenSegments[keyPressed];
+        index = 3;
+      }
+      segments[7 - index] = sevenSegments[keyPressed];
+      index ++;
+      break;
+    case 3: 
+      if(index > 7){
+        segments[7] = sevenSegments[keyPressed];
+        index = 6;
+      }
+      segments[13 - index] = sevenSegments[keyPressed];
+      index ++;
+      break; 
+  }
+}
+
 void displayData(uint8_t address, uint8_t value) {
   // address is MAX7219's register address (1-8 for digits; otherwise see MAX7219 datasheet Table 2)
   // value is the bit pattern to place in the register
@@ -238,7 +280,7 @@ void displayData(uint8_t address, uint8_t value) {
 uint8_t getKeyPressed() {
   uint8_t keyPressed = 0xFF;
   unsigned long now = millis();
-  if (now - lastKeypadPress > DEBOUNCE_TIME) {
+  if (now - lastKeypadPress > DEBOUNCE) {
     lastKeypadPress = now;
     for(int i = 0; i < 4; i++) {
       ioPorts[D0_D7].output |= 0b11110000;
@@ -271,6 +313,17 @@ void clearDisplay(){
   for(int i = 0; i < 8; i++){
     displayData(i+1,0);
   }
+}
+
+void updateDisplay(){
+  displayData(8, segments[0]);
+  displayData(7, segments[1]);
+  displayData(6, segments[2]);
+  displayData(5, segments[3]);
+  displayData(4, segments[4]);
+  displayData(3, segments[5]);
+  displayData(2, segments[6]);
+  displayData(1, segments[7]);
 }
 
 void clearDigits(){
@@ -312,36 +365,38 @@ void badTry(){ //attempt is a number between 0-3, as described in the handout
 
 void blinkCursor(){
   switch(cursorLocation){
+    // we bitwise or the cursor with the current value displayed so that when numbers are shown,
+    // the cursor doesn't erase the number just to blink
     case 1:
       if(FLAG){
-        displayData(8, 0b10000000);
-        displayData(7, 0b10000000);
+        displayData(8, 0b10000000 | segments[0]);
+        displayData(7, 0b10000000 | segments[1]);
         FLAG = !FLAG;
       }else{
-        displayData(8, 0);
-        displayData(7, 0);
+        displayData(8, segments[0]);
+        displayData(7, segments[1]);
         FLAG = !FLAG;
       }
       break;
     case 2:
       if(FLAG){
-        displayData(5, 0b10000000);
-        displayData(4, 0b10000000);
+        displayData(5, 0b10000000 | segments[3]);
+        displayData(4, 0b10000000 | segments[4]);
         FLAG = !FLAG;
       }else{
-        displayData(5, 0);
-        displayData(4, 0);
+        displayData(5, segments[3]);
+        displayData(4, segments[4]);
         FLAG = !FLAG;
       }
       break;
     case 3:
       if(FLAG){
-        displayData(2, 0b10000000);
-        displayData(1, 0b10000000);
+        displayData(2, 0b10000000 | segments[6]);
+        displayData(1, 0b10000000 | segments[7]);
         FLAG = !FLAG;
       }else{
-        displayData(2, 0);
-        displayData(1, 0);
+        displayData(2, segments[6]);
+        displayData(1, segments[7]);
         FLAG = !FLAG;
       }
       break;
@@ -349,18 +404,29 @@ void blinkCursor(){
 }
 
 void moveCursor(){
+  count = 0;
   switch (cursorLocation){
     case 1:
+      displayData(8, segments[0] & 0b01111111);
+      displayData(7, segments[1] & 0b01111111);
+      index = 3;
       cursorLocation = 2;
       break;
     case 2:
+      displayData(5, segments[3] & 0b01111111);
+      displayData(4, segments[4] & 0b01111111);
       cursorLocation = 3;
+      index = 6;
       break;
     case 3: 
+      displayData(2, segments[6] & 0b01111111);
+      displayData(1, segments[7] & 0b01111111);
       cursorLocation = 1;
+      index = 0;
       break; 
   }
 }
+
 uint8_t charToHex(char keyPressed){
   uint8_t hexValue;
   switch (keyPressed){
