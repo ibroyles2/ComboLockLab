@@ -65,6 +65,7 @@ unsigned long lastKeypadPress = 0;
 uint8_t segments[8] = {0, 0, 1, 0, 0, 1, 0, 0}; // holds the values currently displayed on the keypad
 enum mode systemMode;
 uint8_t index = 0;
+uint16_t combination[3];
 
 //variables for button actions
 volatile unsigned long LastLeftAction = 0; // LastLeftAction
@@ -143,7 +144,7 @@ void handleKeypress(){
     key = cowpi_getKeypress();
     keyPressed = charToHex(key);
 //    newKeyPress = charToHex(key);
-    Serial.println(keyPressed);
+//    Serial.println(keyPressed);
     if (systemMode == LOCKED){
       combinationEntry();
     }
@@ -203,6 +204,10 @@ void handleButtonAction() {
     if (OldLeftPosition && !NewLeftPosition){
       LastLeftPress = now;
       Serial.print("Left button pressed\n");
+
+      if(systemMode == LOCKED){
+        checkCombination();
+      }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
         Serial.print("Left button double clicked\n"); 
@@ -235,29 +240,47 @@ void combinationEntry(){
      */
     case 1:
       if(index > 1){
+        segments[0] = 0;
         segments[1] = sevenSegments[keyPressed];
         index = 0;
+        combination[0] = keyPressed;
       }
-      segments[1 - index] = sevenSegments[keyPressed];
+      segments[index] = sevenSegments[keyPressed];
       index ++;
+      combination[0] = ((combination[0] * 16) + keyPressed);
       break;
     case 2:
       if(index > 4){
-        segments[3] = sevenSegments[keyPressed];
+        segments[3] = 0;
+        segments[4] = sevenSegments[keyPressed];
+        combination[1] = keyPressed;
         index = 3;
       }
-      segments[7 - index] = sevenSegments[keyPressed];
+      segments[index] = sevenSegments[keyPressed];
       index ++;
+      combination[1] = ((combination[1] * 16) + keyPressed);
       break;
     case 3: 
       if(index > 7){
+        segments[0] = 0;
         segments[7] = sevenSegments[keyPressed];
+        combination[2] = keyPressed;
         index = 6;
       }
-      segments[13 - index] = sevenSegments[keyPressed];
+      segments[index] = sevenSegments[keyPressed];
       index ++;
+      combination[2] = ((combination[2] * 16) + keyPressed);
       break; 
   }
+  updateDisplay();
+  Serial.println(combination[0]);
+  Serial.println(combination[1]);
+  Serial.println(combination[2]);
+
+}
+
+void checkCombination(){
+  
 }
 
 void displayData(uint8_t address, uint8_t value) {
