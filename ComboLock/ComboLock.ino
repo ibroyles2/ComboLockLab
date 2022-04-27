@@ -104,7 +104,7 @@ void loop() {
 }
 
 volatile long int count = 0;
-volatile int FLAG = 0;
+volatile bool FLAG = 0;
 ISR(TIMER1_COMPA_vect){
   // any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
@@ -112,6 +112,10 @@ ISR(TIMER1_COMPA_vect){
   // if need to reset timer, write 0 to timer1's counter field
 //  if blinkCursor();
   if(systemMode == LOCKED){
+    if(count == 2){
+      count = 0;
+      FLAG = !FLAG;
+    }
     blinkCursor();   
   }
   count++;
@@ -120,13 +124,13 @@ ISR(TIMER1_COMPA_vect){
 
 void setupTimer() {
 /*
- * comparison value = 3225 = 16,000,000 / (2*256)
+ * comparison value = 15625 = 16,000,000 / (4*256)
  * using 256 prescaler
  */
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
-  OCR1A = 312549;
+  OCR1A = 32249;
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
   // Set CS12 bits for 256 prescaler
@@ -262,7 +266,7 @@ void combinationEntry(){
       break;
     case 3: 
       if(index > 7){
-        segments[0] = 0;
+        segments[6] = 0;
         segments[7] = sevenSegments[keyPressed];
         combination[2] = keyPressed;
         index = 6;
@@ -391,36 +395,30 @@ void blinkCursor(){
     // we bitwise or the cursor with the current value displayed so that when numbers are shown,
     // the cursor doesn't erase the number just to blink
     case 1:
-      if(FLAG){
+      if(count < 2 && FLAG){
         displayData(8, 0b10000000 | segments[0]);
         displayData(7, 0b10000000 | segments[1]);
-        FLAG = !FLAG;
-      }else{
+      }else if (count < 2 && !FLAG){
         displayData(8, segments[0]);
         displayData(7, segments[1]);
-        FLAG = !FLAG;
       }
       break;
     case 2:
-      if(FLAG){
+      if(count < 2 && FLAG){
         displayData(5, 0b10000000 | segments[3]);
         displayData(4, 0b10000000 | segments[4]);
-        FLAG = !FLAG;
-      }else{
+      }else if ((count < 2 && !FLAG)){
         displayData(5, segments[3]);
         displayData(4, segments[4]);
-        FLAG = !FLAG;
       }
       break;
     case 3:
-      if(FLAG){
+      if(count < 2 && FLAG){
         displayData(2, 0b10000000 | segments[6]);
         displayData(1, 0b10000000 | segments[7]);
-        FLAG = !FLAG;
-      }else{
+      }else if ((count < 2 && !FLAG)){
         displayData(2, segments[6]);
         displayData(1, segments[7]);
-        FLAG = !FLAG;
       }
       break;
   }
