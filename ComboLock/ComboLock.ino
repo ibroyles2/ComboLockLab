@@ -284,7 +284,16 @@ void combinationEntry(){
 }
 
 void checkCombination(){
-  
+  int check = 0;
+  int i = 0;
+  while(check == 0) {
+    if(combination[i] != EEPROM[i]) {
+      check == 1;
+    }
+  }
+  if(i == 2 && check == 0) {
+    systemMode == UNLOCKED;
+  }
 }
 
 void displayData(uint8_t address, uint8_t value) {
