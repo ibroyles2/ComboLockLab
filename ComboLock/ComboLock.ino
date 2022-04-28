@@ -1,7 +1,8 @@
 #include <EEPROM.h>
 #include "cowpi.h"
 
-#define  DEBOUNCE 20u
+#define  DEBOUNCE_KEYPAD 200u
+# define DEBOUNCE_BUTTON 20u
 #define SINGLE_CLICK_TIME 150u
 #define DOUBLE_CLICK_TIME 500u
 
@@ -83,7 +84,7 @@ void setup() {
   ioPorts = (cowpi_ioPortRegisters *) 0x23;
   spi = (cowpi_spiRegisters *)(cowpi_IObase + 0x2C);
   attachInterrupt(digitalPinToInterrupt(2), handleButtonAction , CHANGE );
-  attachInterrupt(digitalPinToInterrupt(3), handleKeypress , CHANGE );
+  attachInterrupt(digitalPinToInterrupt(3), handleKeypress , RISING );
   setupTimer();
   clearDigits();
   //Set combination
@@ -142,27 +143,39 @@ void setupTimer() {
 void handleKeypress(){
   char key;
   unsigned long now = millis();
-  uint8_t newKeyPress;
-  if(now - lastKeypadPress > DEBOUNCE){ 
+  uint8_t newKeyPressed;
+  if((now - lastKeypadPress > DEBOUNCE_KEYPAD)){ 
     lastKeypadPress = now;
     key = cowpi_getKeypress();
     keyPressed = charToHex(key);
-//    newKeyPress = charToHex(key);
+//    newKeyPressed = charToHex(key);
 //    Serial.println(keyPressed);
     if (systemMode == LOCKED){
       combinationEntry();
     }
   }
-//  if(newKeyPress && !keyPressed){
+//  if (keyPressed == 0 && newKeyPressed != 0){
+//    keyPressed = newKeyPressed;
+//  }
+//  if(newKeyPressed && !keyPressed){
 //    lastKeypadPress = now;
 //    Serial.println("keypad pressed");
-//    keyPressed = newKeyPress;
+//    keyPressed = newKeyPressed;
 //  }
-//  if(!newKeyPress && keyPressed){
+//  if(!newKeyPressed && keyPressed){
 //    lastKeypadPress = now;
 //    Serial.println("keypad released");
 //    return;
 //  }
+  Serial.println(segments[0]);
+  Serial.println(segments[1]);
+  Serial.println(segments[2]);
+  Serial.println(segments[3]);
+  Serial.println(segments[4]);
+  Serial.println(segments[5]);
+  Serial.println(segments[6]);
+  Serial.println(segments[7]);
+  Serial.println(index);
 }
 
 void handleButtonAction() {
@@ -175,13 +188,13 @@ void handleButtonAction() {
   unsigned long now = millis();
   uint8_t NewLeftPosition;
   uint8_t NewRightPosition;
-  if ((now - LastLeftAction) > DEBOUNCE ){
+  if ((now - LastLeftAction) > DEBOUNCE_BUTTON ){
     NewLeftPosition = digitalRead(8);
 //    LastLeftAction = now;
   }else{
     NewLeftPosition = OldLeftPosition;
   }
-  if ((now - LastRightAction) > DEBOUNCE){
+  if ((now - LastRightAction) > DEBOUNCE_BUTTON){
     NewRightPosition = digitalRead(9);
 //    LastRightAction = now;
   }else{
@@ -237,49 +250,79 @@ void handleButtonAction() {
 
 
 void combinationEntry(){
+//       Serial.println("index on entry");
+//     Serial.print(index);
   switch (cursorLocation){
     /*
-     * case 1: I am setting this up to work so that when the user enters a third digit into 
-     * a single combination slot they are able to edit that number
+     * case 1: I am setting this up to work so that when the user enters a third number into 
+     * a single combination slot it clears the previous value and puts the third number into
+     * the first digit of the combination slot.
      */
     case 1:
-      if(index > 1){
+      if(index == 0){
+        segments[1] = sevenSegments[keyPressed];
+        combination[0] = keyPressed;
+        index ++;
+      }else
+      if (index == 1){
+        segments[0] = segments[1];
+        segments[1] = sevenSegments[keyPressed];
+        combination[0] = ((combination[0] * 16) + keyPressed);
+        index ++;
+      }else
+      if (index == 2){
         segments[0] = 0;
         segments[1] = sevenSegments[keyPressed];
-        index = 0;
-        combination[0] = keyPressed;
+        index = 1;
+        combination[0] = keyPressed;        
       }
-      segments[index] = sevenSegments[keyPressed];
-      index ++;
-      combination[0] = ((combination[0] * 16) + keyPressed);
       break;
     case 2:
-      if(index > 4){
-        segments[3] = 0;
+      if(index == 3){
         segments[4] = sevenSegments[keyPressed];
         combination[1] = keyPressed;
-        index = 3;
-      }
-      segments[index] = sevenSegments[keyPressed];
-      index ++;
-      combination[1] = ((combination[1] * 16) + keyPressed);
+        index ++;
+      }else
+      if (index == 4){
+        segments[3] = segments[4];
+        segments[4] = sevenSegments[keyPressed];
+        combination[1] = ((combination[1] * 16) + keyPressed);
+        index ++;
+      }else
+      if (index == 5){
+        segments[3] = 0;
+        segments[4] = sevenSegments[keyPressed];
+        index = 4;
+        combination[1] = keyPressed;        
+      }else
       break;
     case 3: 
-      if(index > 7){
-        segments[6] = 0;
+      if(index == 6){
         segments[7] = sevenSegments[keyPressed];
         combination[2] = keyPressed;
-        index = 6;
+        index ++;
+      }else
+      if (index == 7){
+        segments[6] = segments[7];
+        segments[7] = sevenSegments[keyPressed];
+        combination[2] = ((combination[2] * 16) + keyPressed);
+        index ++;
+      }else
+      if (index == 8){
+        segments[6] = 0;
+        segments[7] = sevenSegments[keyPressed];
+        index = 7;
+        combination[2] = keyPressed;        
       }
-      segments[index] = sevenSegments[keyPressed];
-      index ++;
-      combination[2] = ((combination[2] * 16) + keyPressed);
       break; 
+      updateDisplay;
   }
   updateDisplay();
-  Serial.println(combination[0]);
-  Serial.println(combination[1]);
-  Serial.println(combination[2]);
+//     Serial.println("index on exit");
+//     Serial.print(index);
+//  Serial.println(combination[0]);
+//  Serial.println(combination[1]);
+//  Serial.println(combination[2]);
 
 }
 
@@ -307,7 +350,7 @@ void displayData(uint8_t address, uint8_t value) {
 uint8_t getKeyPressed() {
   uint8_t keyPressed = 0xFF;
   unsigned long now = millis();
-  if (now - lastKeypadPress > DEBOUNCE) {
+  if (now - lastKeypadPress > DEBOUNCE_KEYPAD) {
     lastKeypadPress = now;
     for(int i = 0; i < 4; i++) {
       ioPorts[D0_D7].output |= 0b11110000;
