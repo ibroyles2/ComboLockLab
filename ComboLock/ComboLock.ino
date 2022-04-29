@@ -147,6 +147,7 @@ ISR(TIMER1_COMPA_vect){
       clearCombination();
       updateDisplay();
       count = 0;
+      cursorLocation = 1;
       systemMode = LOCKED;
     }
   }
@@ -259,7 +260,7 @@ void handleButtonAction() {
       }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
-        if(digitalRead(A4) && digitalRead(A5)){
+        if(!digitalRead(A4) && !digitalRead(A5)){
           clearDisplay();
           systemMode = LOCKING;
           count = 0;
