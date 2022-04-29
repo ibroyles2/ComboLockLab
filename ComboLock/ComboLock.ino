@@ -110,6 +110,7 @@ void loop() {
 }
 
 volatile long int count = 0;
+volatile int attempts = 0;
 volatile bool FLAG = 0;
 ISR(TIMER1_COMPA_vect){
   // any vars declared should be as volatile
@@ -168,6 +169,8 @@ void handleKeypress(){
 //    Serial.println(keyPressed);
     if (systemMode == LOCKED){
       combinationEntry();
+    } else if (systemMode == UNLOCKED) {
+      setCombination();
     }
   }
 //  if (keyPressed == 0 && newKeyPressed != 0){
@@ -338,6 +341,10 @@ void combinationEntry(){
 //  Serial.println(combination[0]);
 //  Serial.println(combination[1]);
 //  Serial.println(combination[2]);
+
+}
+
+void setCombination() {
 
 }
 
