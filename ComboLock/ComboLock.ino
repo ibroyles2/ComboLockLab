@@ -98,13 +98,17 @@ void setup() {
 
 void loop() {
 
-  if(systemMode == UNLOCKED){}
+  if(systemMode == UNLOCKED){
+
+    keyPress
+  }
   if(systemMode == ALARMED){}
   if(systemMode == CHANGING){}
   if(systemMode == CONFIRMING){}
 }
 
 volatile long int count = 0;
+volatile int attempts = 0;
 volatile bool FLAG = 0;
 ISR(TIMER1_COMPA_vect){
   // any vars declared should be as volatile
@@ -152,6 +156,8 @@ void handleKeypress(){
 //    Serial.println(keyPressed);
     if (systemMode == LOCKED){
       combinationEntry();
+    } else if (systemMode == UNLOCKED) {
+      setCombination();
     }
   }
 //  if (keyPressed == 0 && newKeyPressed != 0){
@@ -326,16 +332,67 @@ void combinationEntry(){
 
 }
 
+void setCombination() {
+
+}
+
 void checkCombination(){
   int check = 0;
   int i = 0;
   while(check == 0) {
     if(combination[i] != EEPROM[i]) {
       check == 1;
+      attempts++;
     }
   }
   if(i == 2 && check == 0) {
-    systemMode == UNLOCKED;
+    systemMode = UNLOCKED;
+    attempts = 0;
+  } else {
+    switch(attempts) {
+      case 1:
+        displayData(0, sevenSegments[1])
+        displayData(2, 0b00110011);
+        displayData(3, 0b00000101);
+        displayData(4, 0b00001111);
+        displayData(5, segments[13]);
+        displayData(6, segments[10]);
+        displayData(7, segments[11]);
+        int now = millis();
+        while(millis()-now != 1) {
+          //nothing
+        }
+        clearDisplay();
+        break;
+      case 2:
+        displayData(0, sevenSegments[2])
+        displayData(2, 0b00110011);
+        displayData(3, 0b00000101);
+        displayData(4, 0b00001111);
+        displayData(5, segments[13]);
+        displayData(6, segments[10]);
+        displayData(7, segments[11]);
+        int now = millis();
+        while(millis()-now != 1) {
+          //nothing
+        }
+        clearDisplay();
+        break;
+      case 3:
+        displayData(0, sevenSegments[3])
+        displayData(2, 0b00110011);
+        displayData(3, 0b00000101);
+        displayData(4, 0b00001111);
+        displayData(5, segments[13]);
+        displayData(6, segments[10]);
+        displayData(7, segments[11]);
+        int now = millis();
+        while(millis()-now != 1) {
+          //nothing
+        }
+        clearDisplay();
+        break;
+    }
   }
 }
 
