@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, ERROR_};
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, ERROR_, LOCKING};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -86,7 +86,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(2), handleButtonAction , CHANGE );
   attachInterrupt(digitalPinToInterrupt(3), handleKeypress , RISING );
   setupTimer();
-  clearDigits();
+  updateDisplay();
   //Set combination
   EEPROM.put(0, 1);
   EEPROM.put(1, 2);
@@ -138,6 +138,16 @@ ISR(TIMER1_COMPA_vect){
     if(count == 4){
       clearDisplay();
       updateDisplay();
+    }
+  }
+  if(systemMode == LOCKING){
+    if(count == 4){
+      clearDisplay();
+      clearDigits();
+      clearCombination();
+      updateDisplay();
+      count = 0;
+      systemMode = LOCKED;
     }
   }
   count++;
@@ -249,8 +259,13 @@ void handleButtonAction() {
       }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
-        Serial.print("Left button double clicked\n"); 
+        if(digitalRead(A4) && digitalRead(A5)){
+          clearDisplay();
+          systemMode = LOCKING;
+          count = 0;
+          closed();
         }
+      }
     }
     // Case 4: Left Button Released
     if (!OldLeftPosition && NewLeftPosition){
@@ -436,14 +451,21 @@ void updateDisplay(){
 }
 
 void clearDigits(){
-  displayData(8, 0);
-  displayData(7, 0);
-  displayData(6, 1);
-  displayData(5, 0);
-  displayData(4, 0);
-  displayData(3, 1);
-  displayData(2, 0);
-  displayData(1, 0);
+  segments[0] = 0;
+  segments[1] = 0;
+  segments[2] = 1;
+  segments[3] = 0;
+  segments[4] = 0;
+  segments[5] = 1;
+  segments[6] = 0;
+  segments[7] = 0;
+}
+
+void clearCombination(){
+  combination[0] = 0;
+  combination[1] = 0;
+  combination[2] = 0;
+  
 }
 
 void error(){
@@ -492,6 +514,14 @@ void alert(){
   displayData(3, 0b10100000); //  !
 }
 
+void closed(){
+  displayData(8, 0b00001101); // c
+  displayData(7, 0b00001110); // L
+  displayData(6, 0b00011101); // o
+  displayData(5, 0b01011011); // S
+  displayData(4, 0b01001111); // E
+  displayData(3, 0b00111101); // d
+}
 
 void blinkCursor(){
   switch(cursorLocation){
