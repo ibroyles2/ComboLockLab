@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING};
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, ERROR_};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -92,7 +92,7 @@ void setup() {
   EEPROM.put(1, 2);
   EEPROM.put(2, 3);
   //Set system to locked on start
-  systemMode = ALARMED;
+  systemMode = LOCKED;
   ;
 }
 
@@ -110,7 +110,6 @@ void loop() {
 }
 
 volatile long int count = 0;
-volatile int attempts = 0;
 volatile bool FLAG = 0;
 ISR(TIMER1_COMPA_vect){
   // any vars declared should be as volatile
@@ -123,8 +122,7 @@ ISR(TIMER1_COMPA_vect){
       count = 0;
       FLAG = !FLAG;
     }
-    blinkCursor();   
-    count++;
+    blinkCursor();
   }
   if(systemMode == ALARMED){
     if(FLAG){
@@ -136,7 +134,13 @@ ISR(TIMER1_COMPA_vect){
       FLAG = !FLAG;
     }
   }
-  
+  if(systemMode == ERROR_){
+    if(count == 4){
+      clearDisplay();
+      updateDisplay();
+    }
+  }
+  count++;
 
 }
 
@@ -169,8 +173,6 @@ void handleKeypress(){
 //    Serial.println(keyPressed);
     if (systemMode == LOCKED){
       combinationEntry();
-    } else if (systemMode == UNLOCKED) {
-      setCombination();
     }
   }
 //  if (keyPressed == 0 && newKeyPressed != 0){
@@ -226,7 +228,9 @@ void handleButtonAction() {
     // case 1: Right button pressed
     if (OldRightPosition && !NewRightPosition){
       LastRightPress = now;
-      moveCursor();
+      if(systemMode !=  UNLOCKED){
+        moveCursor();
+      }
       Serial.print("Right button pressed\n");
     }
     // Case 2: Right Button Released
@@ -344,15 +348,15 @@ void combinationEntry(){
 
 }
 
-void setCombination() {
-
-}
-
 void checkCombination(){
   int first = EEPROM.read(0);
   int second = EEPROM.read(1);
   int third = EEPROM.read(2);
-  
+
+  if(segments[0] == 0 || segments[3] == 0 || segments[6] == 0){
+    count = 0;
+    error();
+  }
   if(first == combination[0] && second  == combination[1] && third == combination[2]){
     systemMode = UNLOCKED;
     clearDisplay();
@@ -476,7 +480,7 @@ void labOpen(){
   displayData(4, 0b00011101); // o
   displayData(3, 0b01100111); // P
   displayData(2, 0b01001111); // E
-  displayData(2, 0b01110110); // n
+  displayData(1, 0b01110110); // n
 }
 
 void alert(){
@@ -487,6 +491,8 @@ void alert(){
   displayData(4, 0b00001111); // t
   displayData(3, 0b10100000); //  !
 }
+
+
 void blinkCursor(){
   switch(cursorLocation){
     // we bitwise or the cursor with the current value displayed so that when numbers are shown,
