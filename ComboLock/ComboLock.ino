@@ -58,7 +58,7 @@ cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
 
 //Global Variables
-uint8_t attempt = 0;
+uint8_t attempt = 1;
 uint8_t cursorLocation = 1;
 uint8_t locked;
 uint8_t keyPressed = 0; // holds the last key pressed on the 4x4 keypad
@@ -92,14 +92,19 @@ void setup() {
   EEPROM.put(1, 2);
   EEPROM.put(2, 3);
   //Set system to locked on start
-  systemMode = LOCKED;
+  systemMode = ALARMED;
   ;
 }
 
 void loop() {
 
   if(systemMode == UNLOCKED){}
-  if(systemMode == ALARMED){}
+  if(systemMode == ALARMED){
+    detachInterrupt(digitalPinToInterrupt(2));
+    detachInterrupt(digitalPinToInterrupt(3));  
+    clearDisplay();
+    alert();
+  }
   if(systemMode == CHANGING){}
   if(systemMode == CONFIRMING){}
 }
@@ -118,8 +123,19 @@ ISR(TIMER1_COMPA_vect){
       FLAG = !FLAG;
     }
     blinkCursor();   
+    count++;
   }
-  count++;
+  if(systemMode == ALARMED){
+    if(FLAG){
+      digitalWrite(12, HIGH);
+      FLAG = !FLAG;
+    }
+    else{
+      digitalWrite(12, LOW);
+      FLAG = !FLAG;
+    }
+  }
+  
 
 }
 
@@ -221,7 +237,6 @@ void handleButtonAction() {
     if (OldLeftPosition && !NewLeftPosition){
       LastLeftPress = now;
       Serial.print("Left button pressed\n");
-
       if(systemMode == LOCKED){
         checkCombination();
       }
@@ -327,15 +342,19 @@ void combinationEntry(){
 }
 
 void checkCombination(){
-  int check = 0;
-  int i = 0;
-  while(check == 0) {
-    if(combination[i] != EEPROM[i]) {
-      check == 1;
-    }
+  int first = EEPROM.read(0);
+  int second = EEPROM.read(1);
+  int third = EEPROM.read(2);
+  
+  if(first == combination[0] && second  == combination[1] && third == combination[2]){
+    systemMode = UNLOCKED;
+    clearDisplay();
+    labOpen();
+  }else{
+    attempt++;;
   }
-  if(i == 2 && check == 0) {
-    systemMode == UNLOCKED;
+  if(attempt == 4){
+    systemMode == ALARMED;
   }
 }
 
@@ -442,6 +461,25 @@ void badTry(){ //attempt is a number between 0-3, as described in the handout
   }
 }
 
+void labOpen(){
+  displayData(8, 0b00001110); // L
+  displayData(7, 0b01110111); // A
+  displayData(6, 0b00011111); // b
+  displayData(5, 0);         // _
+  displayData(4, 0b00011101); // o
+  displayData(3, 0b01100111); // P
+  displayData(2, 0b01001111); // E
+  displayData(2, 0b01110110); // n
+}
+
+void alert(){
+  displayData(8, 0b01110111); // A
+  displayData(7, 0b00001110); // L
+  displayData(6, 0b01001111); // E
+  displayData(5, 0b00000101); // r
+  displayData(4, 0b00001111); // t
+  displayData(3, 0b10100000); //  !
+}
 void blinkCursor(){
   switch(cursorLocation){
     // we bitwise or the cursor with the current value displayed so that when numbers are shown,
