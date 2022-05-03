@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, ERROR_, LOCKING};
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -134,10 +134,12 @@ ISR(TIMER1_COMPA_vect){
       FLAG = !FLAG;
     }
   }
-  if(systemMode == ERROR_){
+  if(systemMode == BAD_TRY){
     if(count == 4){
       clearDisplay();
       updateDisplay();
+      print_segments();
+      systemMode = LOCKED;
     }
   }
   if(systemMode == LOCKING){
@@ -199,15 +201,6 @@ void handleKeypress(){
 //    Serial.println("keypad released");
 //    return;
 //  }
-  Serial.println(segments[0]);
-  Serial.println(segments[1]);
-  Serial.println(segments[2]);
-  Serial.println(segments[3]);
-  Serial.println(segments[4]);
-  Serial.println(segments[5]);
-  Serial.println(segments[6]);
-  Serial.println(segments[7]);
-  Serial.println(index);
 }
 
 void handleButtonAction() {
@@ -239,7 +232,7 @@ void handleButtonAction() {
     // case 1: Right button pressed
     if (OldRightPosition && !NewRightPosition){
       LastRightPress = now;
-      if(systemMode !=  UNLOCKED){
+      if(systemMode !=  UNLOCKED && systemMode != BAD_TRY){
         moveCursor();
       }
       Serial.print("Right button pressed\n");
@@ -373,15 +366,19 @@ void checkCombination(){
     count = 0;
     error();
   }
+  if(attempt == 4){
+    systemMode == ALARMED;
+  }
   if(first == combination[0] && second  == combination[1] && third == combination[2]){
     systemMode = UNLOCKED;
     clearDisplay();
     labOpen();
   }else{
+    systemMode == BAD_TRY;
+    clearDisplay();
+    badTry();
+    count = 0;
     attempt++;;
-  }
-  if(attempt == 4){
-    systemMode == ALARMED;
   }
 }
 
@@ -435,9 +432,14 @@ uint8_t getKeyPressed() {
 
 
 void clearDisplay(){
-  for(int i = 0; i < 8; i++){
-    displayData(i+1,0);
-  }
+  displayData(8, 0);
+  displayData(7, 0);
+  displayData(6, 0);
+  displayData(5, 0);
+  displayData(4, 0);
+  displayData(3, 0);
+  displayData(2, 0);
+  displayData(1, 0);
 }
 
 void updateDisplay(){
@@ -488,11 +490,7 @@ void badTry(){ //attempt is a number between 0-3, as described in the handout
   displayData(4, 0b00001111); // t
   displayData(3, 0b00000101); // r
   displayData(2, 0b00111011); // y
-  if(attempt != 0){
-    displayData(1, sevenSegments[attempt]);
-  }else {
-    displayData(1,0);
-  }
+  displayData(1, sevenSegments[attempt]);
 }
 
 void labOpen(){
@@ -582,6 +580,20 @@ void moveCursor(){
   }
 }
 
+void print_segments(){
+  char buff[50];
+  snprintf(buff, 50,  "[%d, %d, %d, %d, %d, %d, %d, %d]", 
+  segments[0],
+  segments[1],
+  segments[2],
+  segments[3],
+  segments[4],
+  segments[5],
+  segments[6],
+  segments[7]);
+  Serial.println(buff);
+  
+}
 uint8_t charToHex(char keyPressed){
   uint8_t hexValue;
   switch (keyPressed){
