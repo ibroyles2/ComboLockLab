@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING};
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING, ERROR};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -116,7 +116,6 @@ ISR(TIMER1_COMPA_vect){
   // if need to reset timer, write 0 to timer1's counter field
 //   any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
-//  if blinkCursor();
   if(systemMode == LOCKED){
     if(count == 2){
       count = 0;
@@ -134,16 +133,20 @@ ISR(TIMER1_COMPA_vect){
       FLAG = !FLAG;
     }
   }
-  if(systemMode == BAD_TRY){
-    if(count == 4){
+  if(count == 2){
+    if(systemMode == LOCKED){
+      count = 0;
+      FLAG = !FLAG;
+    }
+  }
+  if(count == 4){
+    if(systemMode == BAD_TRY){
       clearDisplay();
       updateDisplay();
       print_segments();
       systemMode = LOCKED;
     }
-  }
-  if(systemMode == LOCKING){
-    if(count == 4){
+    if(systemMode == LOCKING){
       clearDisplay();
       clearDigits();
       clearCombination();
@@ -152,7 +155,13 @@ ISR(TIMER1_COMPA_vect){
       cursorLocation = 1;
       systemMode = LOCKED;
     }
+    if(systemMode == ERROR){
+      clearDisplay();
+      updateDisplay();
+      systemMode = LOCKED;
+    }
   }
+  Serial.println(systemMode);
   count++;
 
 }
@@ -363,22 +372,26 @@ void checkCombination(){
   int third = EEPROM.read(2);
 
   if(segments[0] == 0 || segments[3] == 0 || segments[6] == 0){
-    count = 0;
+    clearDisplay();
+    systemMode = ERROR;
     error();
-  }
-  if(attempt == 4){
-    systemMode == ALARMED;
-  }
-  if(first == combination[0] && second  == combination[1] && third == combination[2]){
-    systemMode = UNLOCKED;
-    clearDisplay();
-    labOpen();
-  }else{
-    systemMode == BAD_TRY;
-    clearDisplay();
-    badTry();
     count = 0;
-    attempt++;;
+  }else{
+    if(first == combination[0] && second  == combination[1] && third == combination[2]){
+      systemMode = UNLOCKED;
+      clearDisplay();
+      labOpen();
+    }else{
+      if(attempt <= 3){
+        systemMode = BAD_TRY;
+        clearDisplay();
+        badTry();
+        count = 0;
+        attempt++;
+      }else{
+        systemMode = ALARMED;
+      }
+    }
   }
 }
 
