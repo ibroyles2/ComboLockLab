@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CHANGE_, CONFIRMING, BAD_TRY, LOCKING};
+enum mode {LOCKED, UNLOCKED, UNLOCKING, ALARMED, CHANGING, CHANGE_, CONFIRMING, CONFIRM_, BAD_TRY, LOCKING};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -68,6 +68,7 @@ enum mode systemMode;
 uint8_t index = 0;
 uint16_t combination[3];
 uint16_t entry[3];
+uint16_t password[3];
 
 //variables for button actions
 volatile unsigned long LastLeftAction = 0; // LastLeftAction
@@ -161,6 +162,22 @@ ISR(TIMER1_COMPA_vect){
       clearDigits();
       updateDisplay();
       systemMode = CHANGING;
+    }
+  }
+  if(systemMode == CONFIRM_) {
+    if(count == 4) {
+      clearDisplay();
+      clearDigits();
+      updateDisplay();
+      systemMode = CONFIRMING;
+    }
+  }
+  if(systemMode == UNLOCKING) {
+    if(count == 4) {
+      clearDisplay();
+      clearDigits();
+      updateDisplay();
+      systemMode = UNLOCKED;
     }
   }
   
@@ -269,12 +286,16 @@ void handleButtonAction() {
         }
       } else if (systemMode == CHANGING) {
         if(!digitalRead(A4)) {
-          systemMode = CONFIRMING;
+          reenter();
+          systemMode = CONFIRM_;
           entry[0] = EEPROM.read(0);
           entry[1] = EEPROM.read(1);
           entry[2] = EEPROM.read(2);
         }
       } else if (systemMode == CONFIRMING) {
+        if(!digitalRead(A5)) {
+          checkCombination();
+        }
       }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
@@ -409,14 +430,31 @@ void checkCombination(){
       count = 0;
       attempt++;;
     }
-
   } else if(systemMode == CHANGING) {
-    EEPROM.put(0, combination[0]);
-    EEPROM.put(1, combination[2]);
-    EEPROM.put(2, combination[3]);
+      password[0] = EEPROM.read(0);
+      password[1] = EEPROM.read(1);
+      password[2] = EEPROM.read(2);
+      EEPROM.put(0, combination[0]);
+      EEPROM.put(1, combination[2]);
+      EEPROM.put(2, combination[3]);
+      clearCombination();
   } else if(systemMode == CONFIRMING) {
-
-
+      int first = EEPROM.read(0);
+      int second = EEPROM.read(1);
+      int third = EEPROM.read(2);
+      //Keep EEPROM the same if combos match
+      if(first == entry[0] && second == entry[1] && third == entry[3]) {
+        clearDisplay();
+        changed();
+        systemMode = UNLOCKING;
+      } else {
+        EEPROM.put(0, password[0]);
+        EEPROM.put(1, password[1]);
+        EEPROM.put(2, password[2]);
+        clearDisplay();
+        nochange();
+        systemMode = UNLOCKING;
+      }
   }
   
 }
@@ -567,6 +605,38 @@ void enter() {
   displayData(6, 0b00001111); // t
   displayData(5, 0b01001111); // E
   displayData(4, 0b00000101); // r
+}
+
+void reenter() {
+  displayData(8, 0b00000101); // r
+  displayData(7, 0b01001111); // E
+  displayData(6, 0b00000001); // -
+  displayData(5, 0b01001111); // E
+  displayData(4, 0b01110110); // n
+  displayData(3, 0b00001111); // t
+  displayData(2, 0b01001111); // E
+  displayData(1, 0b00000101); // r
+}
+
+void changed() {
+  displayData(8, 0b00001101); // c
+  displayData(7, 0b00110110); // H
+  displayData(6, 0b01110111); // A
+  displayData(5, 0b01110110); // n
+  displayData(4, 0b01011110); // G
+  displayData(3, 0b01001111); // E
+  displayData(2, 0b00111101); // d
+}
+
+void nochange() {
+  displayData(8, 0b01110110); // n
+  displayData(7, 0b00011101); // o
+  displayData(6, 0b00001101); // c
+  displayData(5, 0b00110110); // H
+  displayData(4, 0b01110111); // A
+  displayData(3, 0b01110110); // n
+  displayData(2, 0b01011110); // G
+  displayData(1, 0b01001111); // E
 }
 
 void blinkCursor(){
