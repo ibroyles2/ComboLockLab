@@ -52,7 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING};
+enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CHANGE_, CONFIRMING, BAD_TRY, LOCKING};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -67,6 +67,7 @@ uint8_t segments[8] = {0, 0, 1, 0, 0, 1, 0, 0}; // holds the values currently di
 enum mode systemMode;
 uint8_t index = 0;
 uint16_t combination[3];
+uint16_t entry[3];
 
 //variables for button actions
 volatile unsigned long LastLeftAction = 0; // LastLeftAction
@@ -88,9 +89,9 @@ void setup() {
   setupTimer();
   updateDisplay();
   //Set combination
-  EEPROM.put(0, 1);
-  EEPROM.put(1, 2);
-  EEPROM.put(2, 3);
+  EEPROM.put(0, 136);
+  EEPROM.put(1, 136);
+  EEPROM.put(2, 136);
   //Set system to locked on start
   systemMode = LOCKED;
   ;
@@ -117,12 +118,13 @@ ISR(TIMER1_COMPA_vect){
 //   any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
 //  if blinkCursor();
-  if(systemMode == LOCKED){
+  if(systemMode == LOCKED || systemMode == CHANGING){
     if(count == 2){
       count = 0;
       FLAG = !FLAG;
     }
     blinkCursor();
+    
   }
   if(systemMode == ALARMED){
     if(FLAG){
@@ -153,6 +155,15 @@ ISR(TIMER1_COMPA_vect){
       systemMode = LOCKED;
     }
   }
+  if(systemMode == CHANGE_) {
+    if(count == 4) {
+      clearDisplay();
+      clearDigits();
+      updateDisplay();
+      systemMode = CHANGING;
+    }
+  }
+  
   count++;
 
 }
@@ -184,7 +195,7 @@ void handleKeypress(){
     keyPressed = charToHex(key);
 //    newKeyPressed = charToHex(key);
 //    Serial.println(keyPressed);
-    if (systemMode == LOCKED){
+    if (systemMode == LOCKED || CHANGING){
       combinationEntry();
     }
   }
@@ -250,6 +261,20 @@ void handleButtonAction() {
       Serial.print("Left button pressed\n");
       if(systemMode == LOCKED){
         checkCombination();
+      } else if (systemMode == UNLOCKED) {
+        if(digitalRead(A4) && digitalRead(A5)) {
+          systemMode = CHANGE_;
+          clearDisplay();
+          enter();
+        }
+      } else if (systemMode == CHANGING) {
+        if(!digitalRead(A4)) {
+          systemMode = CONFIRMING;
+          entry[0] = EEPROM.read(0);
+          entry[1] = EEPROM.read(1);
+          entry[2] = EEPROM.read(2);
+        }
+      } else if (systemMode == CONFIRMING) {
       }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
@@ -358,28 +383,42 @@ void combinationEntry(){
 }
 
 void checkCombination(){
-  int first = EEPROM.read(0);
-  int second = EEPROM.read(1);
-  int third = EEPROM.read(2);
 
-  if(segments[0] == 0 || segments[3] == 0 || segments[6] == 0){
-    count = 0;
-    error();
+  if(systemMode == LOCKED) {
+
+    int first = EEPROM.read(0);
+    int second = EEPROM.read(1);
+    int third = EEPROM.read(2);
+
+    if(segments[0] == 0 || segments[3] == 0 || segments[6] == 0){
+      count = 0;
+      error();
+    }
+    if(attempt == 4){
+      systemMode == ALARMED;
+    }
+    if(first == combination[0] && second  == combination[1] && third == combination[2]){
+      systemMode = UNLOCKED;
+      clearDisplay();
+      labOpen();
+    }else{
+      Serial.println(combination[0]);
+      systemMode == BAD_TRY;
+      clearDisplay();
+      badTry();
+      count = 0;
+      attempt++;;
+    }
+
+  } else if(systemMode == CHANGING) {
+    EEPROM.put(0, combination[0]);
+    EEPROM.put(1, combination[2]);
+    EEPROM.put(2, combination[3]);
+  } else if(systemMode == CONFIRMING) {
+
+
   }
-  if(attempt == 4){
-    systemMode == ALARMED;
-  }
-  if(first == combination[0] && second  == combination[1] && third == combination[2]){
-    systemMode = UNLOCKED;
-    clearDisplay();
-    labOpen();
-  }else{
-    systemMode == BAD_TRY;
-    clearDisplay();
-    badTry();
-    count = 0;
-    attempt++;;
-  }
+  
 }
 
 void displayData(uint8_t address, uint8_t value) {
@@ -520,6 +559,14 @@ void closed(){
   displayData(5, 0b01011011); // S
   displayData(4, 0b01001111); // E
   displayData(3, 0b00111101); // d
+}
+
+void enter() {
+  displayData(8, 0b01001111); // E
+  displayData(7, 0b01110110); // n
+  displayData(6, 0b00001111); // t
+  displayData(5, 0b01001111); // E
+  displayData(4, 0b00000101); // r
 }
 
 void blinkCursor(){
