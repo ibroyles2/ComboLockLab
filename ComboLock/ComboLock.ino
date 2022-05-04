@@ -14,6 +14,7 @@ void displayData(uint8_t address, uint8_t value);
 void setupTimer();
 void handleButtonAction();
 void handleKeypress();
+uint8_t getKeyPressed();
 
 
 // Layout of Matrix Keypad
@@ -83,7 +84,7 @@ volatile bool DoubleClick = 0;
 void setup() {
   Serial.begin(9600);
     cowpi_setup(SPI | MAX7219);
-  ioPorts = (cowpi_ioPortRegisters *) 0x23;
+  ioPorts = (cowpi_ioPortRegisters *)(cowpi_IObase + 0x03);
   spi = (cowpi_spiRegisters *)(cowpi_IObase + 0x2C);
   attachInterrupt(digitalPinToInterrupt(2), handleButtonAction , CHANGE );
   attachInterrupt(digitalPinToInterrupt(3), handleKeypress , RISING );
@@ -143,7 +144,7 @@ ISR(TIMER1_COMPA_vect){
     if(systemMode == BAD_TRY){
       clearDisplay();
       updateDisplay();
-      print_segments();
+      //print_segments();
       systemMode = LOCKED;
       if(attempt == 4){
         systemMode = ALARMED;
@@ -212,18 +213,18 @@ void setupTimer() {
 }
 
 void handleKeypress(){
-  char key;
-  unsigned long now = millis();
-  uint8_t newKeyPressed;
-  if((now - lastKeypadPress > DEBOUNCE_KEYPAD)){ 
+unsigned long now = millis();
+  if (now - lastKeypadPress > DEBOUNCE_KEYPAD) {
     lastKeypadPress = now;
-    key = cowpi_getKeypress();
-    keyPressed = charToHex(key);
+    keyPressed = getKeyPressed();
+    Serial.println(keyPressed);
+    //keyPressed = charToHex(key);
     
     if (systemMode == LOCKED || CHANGING || CONFIRMING){
       combinationEntry();
     }
   }
+  
 //  if (keyPressed == 0 && newKeyPressed != 0){
 //    keyPressed = newKeyPressed;
 //  }
@@ -496,10 +497,6 @@ void displayData(uint8_t address, uint8_t value) {
 }
 
 uint8_t getKeyPressed() {
-  uint8_t keyPressed = 0xFF;
-  unsigned long now = millis();
-  if (now - lastKeypadPress > DEBOUNCE_KEYPAD) {
-    lastKeypadPress = now;
     for(int i = 0; i < 4; i++) {
       ioPorts[D0_D7].output |= 0b11110000;
       if(i == 0) {         
@@ -512,17 +509,20 @@ uint8_t getKeyPressed() {
         ioPorts[D0_D7].output &= 0b01110000;
       }
       if(!(ioPorts[A0_A5].input & 0b000001)) {
-        keyPressed = keys[i][0];
+          Serial.println("Hello");
+          keyPressed = keys[i][0];
       } else if (!(ioPorts[A0_A5].input & 0b000010)) {
-        keyPressed = keys[i][1];
+          Serial.println("Hello");
+          keyPressed = keys[i][1];
       } else if (!(ioPorts[A0_A5].input & 0b000100)) {
-        keyPressed = keys[i][2];
+          Serial.println("Hello");
+          keyPressed = keys[i][2];
       } else if (!(ioPorts[A0_A5].input & 0b001000)) {
-        keyPressed = keys[i][3];
+          Serial.println("Hello");
+          keyPressed = keys[i][3];
       }
     }
     ioPorts[D0_D7].output &= 0b00000000;
-  }
   return keyPressed;
 }
 
