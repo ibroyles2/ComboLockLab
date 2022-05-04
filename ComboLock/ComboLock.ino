@@ -132,11 +132,11 @@ ISR(TIMER1_COMPA_vect){
   }
   if(systemMode == ALARMED){
     if(FLAG){
-      digitalWrite(12, HIGH);
+      ioPorts[D8_D13].output = ioPorts[D8_D13].output | 0b010000;
       FLAG = !FLAG;
     }
     else{
-      digitalWrite(12, LOW);
+      ioPorts[D8_D13].output = ioPorts[D8_D13].output & 0b101111;
       FLAG = !FLAG;
     }
   }
