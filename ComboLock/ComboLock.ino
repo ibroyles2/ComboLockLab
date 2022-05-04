@@ -90,9 +90,10 @@ void setup() {
   setupTimer();
   updateDisplay();
   //Set combination
-  EEPROM.put(0, 136);
-  EEPROM.put(1, 136);
-  EEPROM.put(2, 136);
+  // UNCOMMENT THE NEXT THREE LINES FOR FIRST RUN OF THE SYSTEM
+  //  EEPROM.put(0, 136);
+  //  EEPROM.put(1, 136);
+  //  EEPROM.put(2, 136);
   //Set system to locked on start
   systemMode = LOCKED;
   ;
@@ -138,12 +139,6 @@ ISR(TIMER1_COMPA_vect){
       FLAG = !FLAG;
     }
   }
-  if(count == 2){
-    if(systemMode == LOCKED){
-      count = 0;
-      FLAG = !FLAG;
-    }
-  }
   if(count == 4){
     if(systemMode == BAD_TRY){
       clearDisplay();
@@ -170,10 +165,7 @@ ISR(TIMER1_COMPA_vect){
       updateDisplay();
       systemMode = LOCKED;
     }
-  }
-  if(systemMode == CHANGE_) {
-    Serial.println(count);
-    if(count == 4) {
+    if(systemMode == CHANGE_) {
       count = 0;
       clearDisplay();
       clearDigits();
@@ -181,9 +173,7 @@ ISR(TIMER1_COMPA_vect){
       cursorLocation = 1;
       systemMode = CHANGING;
     }
-  }
-  if(systemMode == CONFIRM_) {
-    if(count == 4) {
+    if(systemMode == CONFIRM_) {
       count = 0;
       clearDisplay();
       clearDigits();
@@ -191,9 +181,8 @@ ISR(TIMER1_COMPA_vect){
       cursorLocation = 1;
       systemMode = CONFIRMING;
     }
-  }
-  if(systemMode == UNLOCKING) {
-    if(count == 4) {
+
+    if(systemMode == UNLOCKING) {
       clearDisplay();
       clearDigits();
       updateDisplay();
@@ -230,8 +219,7 @@ void handleKeypress(){
     lastKeypadPress = now;
     key = cowpi_getKeypress();
     keyPressed = charToHex(key);
-//    newKeyPressed = charToHex(key);
-//    Serial.println(keyPressed);
+    
     if (systemMode == LOCKED || CHANGING || CONFIRMING){
       combinationEntry();
     }
@@ -728,20 +716,6 @@ void moveCursor(){
   }
 }
 
-void print_segments(){
-  char buff[50];
-  snprintf(buff, 50,  "[%d, %d, %d, %d, %d, %d, %d, %d]", 
-  segments[0],
-  segments[1],
-  segments[2],
-  segments[3],
-  segments[4],
-  segments[5],
-  segments[6],
-  segments[7]);
-  Serial.println(buff);
-  
-}
 uint8_t charToHex(char keyPressed){
   uint8_t hexValue;
   switch (keyPressed){
