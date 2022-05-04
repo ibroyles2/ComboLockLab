@@ -73,8 +73,8 @@ uint16_t password[3];
 //variables for button actions
 volatile unsigned long LastLeftAction = 0; // LastLeftAction
 volatile unsigned long LastRightAction = 0; // LastRightAction
-volatile unsigned long OldLeftPosition = 1; // OldLeftPosition
-volatile unsigned long OldRightPosition = 1; // OldRightPosition
+volatile unsigned long OldLeftPosition = ioPorts[D8_D13].input & 0b000001;; // OldLeftPosition
+volatile unsigned long OldRightPosition = ioPorts[D8_D13].input & 0b000010;; // OldRightPosition
 volatile unsigned long LastLeftPress = 0; // LastLeftPress
 volatile unsigned long LastRightPress = 0; // LastRightPress
 volatile unsigned long LastLeftClick = 0; // LastLeftClick
@@ -117,7 +117,10 @@ ISR(TIMER1_COMPA_vect){
 //   any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
 //  if blinkCursor();
-  if(systemMode == LOCKED || systemMode == CHANGING){
+  if(systemMode == LOCKED || systemMode == CHANGING || systemMode == CONFIRMING){
+    if(systemMode == CHANGING) {
+      Serial.println(count);
+    }
     if(count == 2){
       count = 0;
       FLAG = !FLAG;
@@ -127,11 +130,11 @@ ISR(TIMER1_COMPA_vect){
   }
   if(systemMode == ALARMED){
     if(FLAG){
-      digitalWrite(12, HIGH);
+      ioPorts[D8_D13].output = ioPorts[D8_D13].output | 0b010000;
       FLAG = !FLAG;
     }
     else{
-      digitalWrite(12, LOW);
+      ioPorts[D8_D13].output = ioPorts[D8_D13].output & 0b101111;
       FLAG = !FLAG;
     }
   }
@@ -169,18 +172,23 @@ ISR(TIMER1_COMPA_vect){
     }
   }
   if(systemMode == CHANGE_) {
+    Serial.println(count);
     if(count == 4) {
+      count = 0;
       clearDisplay();
       clearDigits();
       updateDisplay();
+      cursorLocation = 1;
       systemMode = CHANGING;
     }
   }
   if(systemMode == CONFIRM_) {
     if(count == 4) {
+      count = 0;
       clearDisplay();
       clearDigits();
       updateDisplay();
+      cursorLocation = 1;
       systemMode = CONFIRMING;
     }
   }
@@ -224,7 +232,7 @@ void handleKeypress(){
     keyPressed = charToHex(key);
 //    newKeyPressed = charToHex(key);
 //    Serial.println(keyPressed);
-    if (systemMode == LOCKED || CHANGING){
+    if (systemMode == LOCKED || CHANGING || CONFIRMING){
       combinationEntry();
     }
   }
@@ -254,13 +262,13 @@ void handleButtonAction() {
   uint8_t NewLeftPosition;
   uint8_t NewRightPosition;
   if ((now - LastLeftAction) > DEBOUNCE_BUTTON ){
-    NewLeftPosition = digitalRead(8);
+    NewLeftPosition = ioPorts[D8_D13].input & 0b000001;
 //    LastLeftAction = now;
   }else{
     NewLeftPosition = OldLeftPosition;
   }
   if ((now - LastRightAction) > DEBOUNCE_BUTTON){
-    NewRightPosition = digitalRead(9);
+    NewRightPosition = ioPorts[D8_D13].input & 0b000010;
 //    LastRightAction = now;
   }else{
     NewRightPosition = OldRightPosition;
@@ -291,27 +299,31 @@ void handleButtonAction() {
       if(systemMode == LOCKED){
         checkCombination();
       } else if (systemMode == UNLOCKED) {
-        if(digitalRead(A4) && digitalRead(A5)) {
-          systemMode = CHANGE_;
+        if((ioPorts[A0_A5].input & 0b010000) && (ioPorts[A0_A5].input & 0b100000)) {
           clearDisplay();
           enter();
+          count = 0;
+          systemMode = CHANGE_;
         }
       } else if (systemMode == CHANGING) {
-        if(!digitalRead(A4)) {
+        if(!(ioPorts[A0_A5].input & 0b010000)) {
+          checkCombination();
           reenter();
+          count = 0;
           systemMode = CONFIRM_;
+          //Holds previous password
           entry[0] = EEPROM.read(0);
           entry[1] = EEPROM.read(1);
           entry[2] = EEPROM.read(2);
         }
       } else if (systemMode == CONFIRMING) {
-        if(!digitalRead(A5)) {
+        if(!(ioPorts[A0_A5].input & 0b100000)) {
           checkCombination();
         }
       }
       if ((LastLeftClick + DOUBLE_CLICK_TIME) > now){
         DoubleClick = true;
-        if(!digitalRead(A4) && !digitalRead(A5)){
+        if(!(ioPorts[A0_A5].input & 0b010000) && !(ioPorts[A0_A5].input & 0b100000)){
           clearDisplay();
           systemMode = LOCKING;
           count = 0;
@@ -440,26 +452,36 @@ void checkCombination(){
       attempt++;
     }
   } else if(systemMode == CHANGING) {
+      EEPROM.put(0, combination[0]);
+      EEPROM.put(1, combination[1]);
+      EEPROM.put(2, combination[2]);
       password[0] = EEPROM.read(0);
       password[1] = EEPROM.read(1);
       password[2] = EEPROM.read(2);
-      EEPROM.put(0, combination[0]);
-      EEPROM.put(1, combination[2]);
-      EEPROM.put(2, combination[3]);
       clearCombination();
   } else if(systemMode == CONFIRMING) {
-      int first = EEPROM.read(0);
-      int second = EEPROM.read(1);
-      int third = EEPROM.read(2);
+      int first = combination[0];
+      int second = combination[1];
+      int third = combination[2];
+
+      Serial.println("EEPROM:");
+      Serial.println(first);
+      Serial.println(second);
+      Serial.println(third);
+      Serial.println("Combo:");
+      Serial.println(password[0]);
+      Serial.println(password[1]);
+      Serial.println(password[2]);
       //Keep EEPROM the same if combos match
-      if(first == entry[0] && second == entry[1] && third == entry[3]) {
+      if(first == password[0] && second == password[1] && third == password[3]) {
+        Serial.println("Hey");
         clearDisplay();
         changed();
         systemMode = UNLOCKING;
       } else {
-        EEPROM.put(0, password[0]);
-        EEPROM.put(1, password[1]);
-        EEPROM.put(2, password[2]);
+        EEPROM.put(0, entry[0]);
+        EEPROM.put(1, entry[1]);
+        EEPROM.put(2, entry[2]);
         clearDisplay();
         nochange();
         systemMode = UNLOCKING;
