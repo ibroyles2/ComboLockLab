@@ -52,8 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING, ERROR};
-enum mode {LOCKED, UNLOCKED, UNLOCKING, ALARMED, CHANGING, CHANGE_, CONFIRMING, CONFIRM_, BAD_TRY, LOCKING};
+enum mode {LOCKED, UNLOCKED, UNLOCKING, ALARMED, CHANGING, CHANGE_, CONFIRMING, CONFIRM_, BAD_TRY, LOCKING, ERROR};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -105,8 +104,6 @@ void loop() {
   if(systemMode == ALARMED){
     detachInterrupt(digitalPinToInterrupt(2));
     detachInterrupt(digitalPinToInterrupt(3));  
-    clearDisplay();
-    alert();
   }
   if(systemMode == CHANGING){}
   if(systemMode == CONFIRMING){}
@@ -150,6 +147,11 @@ ISR(TIMER1_COMPA_vect){
       updateDisplay();
       print_segments();
       systemMode = LOCKED;
+      if(attempt == 4){
+        systemMode = ALARMED;
+        clearDisplay();
+        alert();
+      }
     }
     if(systemMode == LOCKING){
       clearDisplay();
@@ -420,25 +422,22 @@ void checkCombination(){
     int first = EEPROM.read(0);
     int second = EEPROM.read(1);
     int third = EEPROM.read(2);
-
+    
     if(segments[0] == 0 || segments[3] == 0 || segments[6] == 0){
       count = 0;
+      systemMode = ERROR;
       error();
-    }
-    if(attempt == 4){
-      systemMode == ALARMED;
-    }
-    if(first == combination[0] && second  == combination[1] && third == combination[2]){
-      systemMode = UNLOCKED;
-      clearDisplay();
-      labOpen();
+    } else if(first == combination[0] && second  == combination[1] && third == combination[2]){
+        systemMode = UNLOCKED;
+        clearDisplay();
+        labOpen();
     }else{
       Serial.println(combination[0]);
-      systemMode == BAD_TRY;
+      systemMode = BAD_TRY;
       clearDisplay();
       badTry();
       count = 0;
-      attempt++;;
+      attempt++;
     }
   } else if(systemMode == CHANGING) {
       password[0] = EEPROM.read(0);
