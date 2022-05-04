@@ -52,8 +52,7 @@ const uint8_t sevenSegments[16] = {
 0b01000111, //F
 };
 
-enum mode {LOCKED, UNLOCKED, ALARMED, CHANGING, CONFIRMING, BAD_TRY, LOCKING, ERROR};
-enum mode {LOCKED, UNLOCKED, UNLOCKING, ALARMED, CHANGING, CHANGE_, CONFIRMING, CONFIRM_, BAD_TRY, LOCKING};
+enum mode {LOCKED, UNLOCKED, UNLOCKING, ALARMED, CHANGING, CHANGE_, CONFIRMING, CONFIRM_, BAD_TRY, LOCKING, ERROR};
 /* Memory-mapped I/O */
 cowpi_ioPortRegisters *ioPorts;     // an array of I/O ports
 cowpi_spiRegisters *spi;            // a pointer to the single set of SPI registers
@@ -120,7 +119,7 @@ ISR(TIMER1_COMPA_vect){
 //   any vars declared should be as volatile
   // if need to reset timer, write 0 to timer1's counter field
 //  if blinkCursor();
-  if(systemMode == LOCKED || systemMode == CHANGING){
+  if(systemMode == LOCKED || systemMode == CHANGING || systemMode == CONFIRMING){
     if(count == 2){
       count = 0;
       FLAG = !FLAG;
@@ -222,7 +221,7 @@ void handleKeypress(){
     keyPressed = charToHex(key);
 //    newKeyPressed = charToHex(key);
 //    Serial.println(keyPressed);
-    if (systemMode == LOCKED || CHANGING){
+    if (systemMode == LOCKED || CHANGING || CONFIRMING){
       combinationEntry();
     }
   }
@@ -290,14 +289,16 @@ void handleButtonAction() {
         checkCombination();
       } else if (systemMode == UNLOCKED) {
         if(digitalRead(A4) && digitalRead(A5)) {
-          systemMode = CHANGE_;
           clearDisplay();
           enter();
+          systemMode = CHANGE_;
         }
       } else if (systemMode == CHANGING) {
         if(!digitalRead(A4)) {
+          checkCombination();
           reenter();
           systemMode = CONFIRM_;
+          //Holds previous password
           entry[0] = EEPROM.read(0);
           entry[1] = EEPROM.read(1);
           entry[2] = EEPROM.read(2);
@@ -441,26 +442,36 @@ void checkCombination(){
       attempt++;;
     }
   } else if(systemMode == CHANGING) {
+      EEPROM.put(0, combination[0]);
+      EEPROM.put(1, combination[1]);
+      EEPROM.put(2, combination[2]);
       password[0] = EEPROM.read(0);
       password[1] = EEPROM.read(1);
       password[2] = EEPROM.read(2);
-      EEPROM.put(0, combination[0]);
-      EEPROM.put(1, combination[2]);
-      EEPROM.put(2, combination[3]);
       clearCombination();
   } else if(systemMode == CONFIRMING) {
-      int first = EEPROM.read(0);
-      int second = EEPROM.read(1);
-      int third = EEPROM.read(2);
+      int first = combination[0];
+      int second = combination[1];
+      int third = combination[2];
+
+      Serial.println("EEPROM:");
+      Serial.println(first);
+      Serial.println(second);
+      Serial.println(third);
+      Serial.println("Combo:");
+      Serial.println(password[0]);
+      Serial.println(password[1]);
+      Serial.println(password[2]);
       //Keep EEPROM the same if combos match
-      if(first == entry[0] && second == entry[1] && third == entry[3]) {
+      if(first == password[0] && second == password[1] && third == password[3]) {
+        Serial.println("Hey");
         clearDisplay();
         changed();
         systemMode = UNLOCKING;
       } else {
-        EEPROM.put(0, password[0]);
-        EEPROM.put(1, password[1]);
-        EEPROM.put(2, password[2]);
+        EEPROM.put(0, entry[0]);
+        EEPROM.put(1, entry[1]);
+        EEPROM.put(2, entry[2]);
         clearDisplay();
         nochange();
         systemMode = UNLOCKING;
